@@ -3,7 +3,8 @@ import Sidebar from './components/Sidebar';
 import ChatArea from './components/ChatArea';
 import MessageInput from './components/MessageInput';
 import VideoCallModal from './components/VideoCallModal';
-import { Channel, Message, MessageType, SenderType } from './types';
+import AuthPage from './components/AuthPage';
+import { Channel, Message, MessageType, SenderType, User } from './types';
 import { sendMessageStream } from './services/geminiService';
 import { INITIAL_CHANNELS, MOCK_MESSAGES } from './constants';
 
@@ -14,6 +15,10 @@ const API_URL = 'http://localhost:3001/api';
 const generateId = () => Math.random().toString(36).substr(2, 9);
 
 const App: React.FC = () => {
+  // Auth State
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
+
+  // App State
   const [channels, setChannels] = useState<Channel[]>([]);
   const [activeChannelId, setActiveChannelId] = useState<string>('ai-assistant');
   const [messages, setMessages] = useState<Message[]>([]);
@@ -23,6 +28,8 @@ const App: React.FC = () => {
 
   // Load Channels from Backend with Fallback
   useEffect(() => {
+    if (!currentUser) return; // Only fetch if logged in
+
     const fetchChannels = async () => {
       try {
         const response = await fetch(`${API_URL}/channels`);
@@ -42,13 +49,13 @@ const App: React.FC = () => {
       }
     };
     fetchChannels();
-  }, []);
+  }, [currentUser]);
 
   const activeChannel = channels.find(c => c.id === activeChannelId) || channels[0] || { id: 'loading', name: 'Loading...', type: 'channel' };
 
   // Load Messages when active channel changes
   useEffect(() => {
-    if (!activeChannelId) return;
+    if (!currentUser || !activeChannelId) return;
 
     // AI Channel logic (Local RAM only for this demo)
     if (activeChannel.type === 'ai') {
@@ -57,12 +64,11 @@ const App: React.FC = () => {
             channelId: 'ai-assistant', 
             senderId: 'Gemini', 
             senderType: SenderType.AI, 
-            content: 'Xin chào! Tôi là trợ lý AI của bạn. Tôi có thể giúp gì cho công việc hôm nay?', 
+            content: `Xin chào ${currentUser.name}! Tôi có thể giúp gì cho bạn hôm nay?`, 
             timestamp: Date.now(), 
             type: MessageType.TEXT 
         };
-        // Check if we already have messages for this channel in a local cache (not implemented here) or just reset
-        // For simplicity, reset to welcome message if empty
+        // Reset to welcome message if empty
         setMessages([aiWelcome]);
         return;
     }
@@ -77,7 +83,7 @@ const App: React.FC = () => {
         const formattedMessages = data.map((msg: any) => ({
             id: msg.id,
             channelId: msg.channel_id,
-            senderId: msg.sender_id,
+            senderId: msg.sender_id, // This is the username/name string stored in DB
             senderType: msg.sender_type,
             content: msg.content,
             timestamp: parseInt(msg.timestamp),
@@ -99,7 +105,7 @@ const App: React.FC = () => {
     const interval = setInterval(fetchMessages, 3000);
     return () => clearInterval(interval);
 
-  }, [activeChannelId, activeChannel.type]);
+  }, [activeChannelId, activeChannel.type, currentUser]);
 
   const updateAiMessage = useCallback((messageId: string, content: string, isStreaming: boolean) => {
     setMessages(prev => 
@@ -110,6 +116,8 @@ const App: React.FC = () => {
   }, []);
 
   const handleSendMessage = async (text: string, file?: File) => {
+    if (!currentUser) return;
+
     const tempId = generateId();
     const timestamp = Date.now();
     
@@ -117,7 +125,7 @@ const App: React.FC = () => {
     const userMsg: Message = {
       id: tempId,
       channelId: activeChannelId,
-      senderId: 'Me', 
+      senderId: currentUser.name, 
       senderType: SenderType.USER,
       content: text,
       timestamp: timestamp,
@@ -174,7 +182,7 @@ const App: React.FC = () => {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     channelId: activeChannelId,
-                    senderId: 'Minh Nguyen', 
+                    senderId: currentUser.name, 
                     senderType: 'USER',
                     content: text,
                     type: file ? 'FILE' : 'TEXT',
@@ -184,11 +192,16 @@ const App: React.FC = () => {
             if (!response.ok) throw new Error('Failed to send to server');
         } catch (error) {
             console.error("Failed to send message to backend (Offline mode active)", error);
-            // In a real app, we might queue this message to retry later
         }
     }
   };
 
+  // Render Auth Page if not logged in
+  if (!currentUser) {
+      return <AuthPage onLoginSuccess={setCurrentUser} />;
+  }
+
+  // Render Main App
   return (
     <div className="flex h-screen overflow-hidden bg-gray-100">
       <Sidebar 
@@ -197,6 +210,8 @@ const App: React.FC = () => {
         onSelectChannel={setActiveChannelId}
         isOpen={isSidebarOpen}
         onCloseMobile={() => setIsSidebarOpen(false)}
+        currentUser={currentUser}
+        onLogout={() => setCurrentUser(null)}
       />
       
       <main className="flex-1 flex flex-col min-w-0 transition-all duration-300">

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Channel } from '../types';
+import { Channel, User as UserType } from '../types';
 import { Hash, User, Bot, Plus, Settings, LogOut, Menu } from 'lucide-react';
 
 interface SidebarProps {
@@ -8,9 +8,11 @@ interface SidebarProps {
   onSelectChannel: (channelId: string) => void;
   isOpen: boolean;
   onCloseMobile: () => void;
+  currentUser: UserType | null;
+  onLogout: () => void;
 }
 
-const Sidebar: React.FC<SidebarProps> = ({ channels, activeChannelId, onSelectChannel, isOpen, onCloseMobile }) => {
+const Sidebar: React.FC<SidebarProps> = ({ channels, activeChannelId, onSelectChannel, isOpen, onCloseMobile, currentUser, onLogout }) => {
   const groupChannels = channels.filter(c => c.type === 'channel');
   const dms = channels.filter(c => c.type === 'dm');
   const aiChannels = channels.filter(c => c.type === 'ai');
@@ -123,20 +125,30 @@ const Sidebar: React.FC<SidebarProps> = ({ channels, activeChannelId, onSelectCh
         </div>
 
         {/* User Footer */}
-        <div className="p-4 bg-slate-950/50 border-t border-slate-800">
-          <div className="flex items-center">
-            <img src="https://picsum.photos/40/40" alt="Me" className="w-9 h-9 rounded-full border border-slate-600" />
-            <div className="ml-3 flex-1 min-w-0">
-              <p className="text-sm font-medium text-white truncate">Minh Nguyen</p>
-              <p className="text-xs text-slate-400 truncate">Sẵn sàng</p>
-            </div>
-            <div className="flex space-x-1">
-                <button className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-800 rounded-md transition-colors">
-                    <Settings size={16} />
-                </button>
+        {currentUser && (
+          <div className="p-4 bg-slate-950/50 border-t border-slate-800">
+            <div className="flex items-center">
+              <img 
+                src={currentUser.avatar} 
+                alt={currentUser.name} 
+                className="w-9 h-9 rounded-full border border-slate-600 bg-slate-700" 
+              />
+              <div className="ml-3 flex-1 min-w-0">
+                <p className="text-sm font-medium text-white truncate">{currentUser.name}</p>
+                <p className="text-xs text-slate-400 truncate capitalize">{currentUser.status}</p>
+              </div>
+              <div className="flex space-x-1">
+                  <button 
+                    onClick={onLogout}
+                    title="Đăng xuất"
+                    className="p-1.5 text-slate-400 hover:text-red-400 hover:bg-slate-800 rounded-md transition-colors"
+                  >
+                      <LogOut size={16} />
+                  </button>
+              </div>
             </div>
           </div>
-        </div>
+        )}
       </aside>
     </>
   );
