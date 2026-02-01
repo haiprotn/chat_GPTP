@@ -8,8 +8,12 @@ import { Channel, Message, MessageType, SenderType, User } from './types';
 import { sendMessageStream } from './services/geminiService';
 import { INITIAL_CHANNELS, MOCK_MESSAGES } from './constants';
 
-// API Configuration
-const API_URL = 'http://localhost:3001/api';
+// API Configuration - Dynamic Hostname
+// This ensures that if you access via 192.168.x.x, the API calls also go to 192.168.x.x
+const getApiUrl = () => {
+  const hostname = window.location.hostname;
+  return `http://${hostname}:3001/api`;
+};
 
 // Fallback ID generator
 const generateId = () => Math.random().toString(36).substr(2, 9);
@@ -32,7 +36,7 @@ const App: React.FC = () => {
 
     const fetchChannels = async () => {
       try {
-        const response = await fetch(`${API_URL}/channels`);
+        const response = await fetch(`${getApiUrl()}/channels`);
         if (!response.ok) throw new Error('Network response was not ok');
         
         const data = await response.json();
@@ -75,7 +79,7 @@ const App: React.FC = () => {
 
     const fetchMessages = async () => {
       try {
-        const response = await fetch(`${API_URL}/messages/${activeChannelId}`);
+        const response = await fetch(`${getApiUrl()}/messages/${activeChannelId}`);
         if (!response.ok) throw new Error('Network response was not ok');
         
         const data = await response.json();
@@ -177,7 +181,7 @@ const App: React.FC = () => {
     } else {
         // --- NORMAL CHAT LOGIC (Send to Backend DB) ---
         try {
-            const response = await fetch(`${API_URL}/messages`, {
+            const response = await fetch(`${getApiUrl()}/messages`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
