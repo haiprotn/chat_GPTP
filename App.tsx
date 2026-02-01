@@ -57,49 +57,49 @@ const App: React.FC = () => {
     }
   };
 
+  const fetchChannels = useCallback(async () => {
+    if (!currentUser) return;
+    try {
+      const response = await fetch(`${API_URL}/channels/${currentUser.id}`);
+      if (!response.ok) throw new Error('Network error');
+      const data: Channel[] = await response.json();
+      
+      // Check for new messages for notification
+      data.forEach(ch => {
+          const prevTime = channelTimestampsRef.current[ch.id] || 0;
+          const newTime = ch.lastMessageTime || 0;
+          
+          // If new message exists AND it's newer than what we knew AND it's not sent by me
+          if (newTime > prevTime && prevTime !== 0) { 
+              if (ch.lastMessageSender !== currentUser.name) {
+                   if (document.visibilityState === 'hidden' || ch.id !== activeChannelId) {
+                       sendNotification(ch.name, ch.lastMessage || 'Tin nhắn mới', ch.avatar);
+                   }
+              }
+          }
+          // Update ref
+          channelTimestampsRef.current[ch.id] = newTime;
+      });
+
+      // Initial population of ref without notifying
+      if (Object.keys(channelTimestampsRef.current).length === 0) {
+          data.forEach(ch => {
+              channelTimestampsRef.current[ch.id] = ch.lastMessageTime || 0;
+          });
+      }
+
+      setChannels(data);
+    } catch (error) {
+      setChannels(INITIAL_CHANNELS);
+    }
+  }, [currentUser, activeChannelId]);
+
   // Update logic to fetch channels specific to user (using updated backend)
   useEffect(() => {
-    if (!currentUser) return;
-    const fetchChannels = async () => {
-      try {
-        const response = await fetch(`${API_URL}/channels/${currentUser.id}`); // Endpoint updated to support User specific channels
-        if (!response.ok) throw new Error('Network error');
-        const data: Channel[] = await response.json();
-        
-        // Check for new messages for notification
-        data.forEach(ch => {
-            const prevTime = channelTimestampsRef.current[ch.id] || 0;
-            const newTime = ch.lastMessageTime || 0;
-            
-            // If new message exists AND it's newer than what we knew AND it's not sent by me
-            if (newTime > prevTime && prevTime !== 0) { // prevTime !== 0 ensures we don't notify on initial load
-                if (ch.lastMessageSender !== currentUser.name) {
-                     // Condition: Notify if tab is hidden OR if the message is from a channel NOT currently active
-                     if (document.visibilityState === 'hidden' || ch.id !== activeChannelId) {
-                         sendNotification(ch.name, ch.lastMessage || 'Tin nhắn mới', ch.avatar);
-                     }
-                }
-            }
-            // Update ref
-            channelTimestampsRef.current[ch.id] = newTime;
-        });
-
-        // Initial population of ref without notifying
-        if (Object.keys(channelTimestampsRef.current).length === 0) {
-            data.forEach(ch => {
-                channelTimestampsRef.current[ch.id] = ch.lastMessageTime || 0;
-            });
-        }
-
-        setChannels(data);
-      } catch (error) {
-        setChannels(INITIAL_CHANNELS);
-      }
-    };
     fetchChannels();
-    const interval = setInterval(fetchChannels, 5000); // Poll channels for new DMs
+    const interval = setInterval(fetchChannels, 5000); // Poll channels
     return () => clearInterval(interval);
-  }, [currentUser, activeChannelId]);
+  }, [fetchChannels]);
 
   // Handle auto-select (only if channels load and desktop)
   useEffect(() => {
@@ -240,11 +240,8 @@ const App: React.FC = () => {
               body: JSON.stringify({ user1Id: currentUser.id, user2Id: targetUserId })
           });
           const channel = await res.json();
-          // Force reload channels or manually add to state
-          setChannels(prev => {
-              if (prev.find(p => p.id === channel.id)) return prev;
-              return [channel, ...prev]; // Add to top
-          });
+          // Immediately fetch channels to ensure state consistency
+          await fetchChannels();
           setActiveChannelId(channel.id);
       } catch (e) {
           console.error("Cannot create DM", e);
@@ -274,6 +271,8 @@ const App: React.FC = () => {
             onLogout={() => setCurrentUser(null)}
             isMobileView={isMobile}
             onOpenAddFriend={() => setShowAddFriend(true)}
+            onRefresh={fetchChannels}
+            onStartChat={handleStartChat}
           />
           
           <div className="md:hidden h-14 bg-white border-t border-gray-200 flex justify-around items-center absolute bottom-0 w-full z-10 safe-bottom">

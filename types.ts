@@ -1,3 +1,4 @@
+
 export enum MessageType {
   TEXT = 'TEXT',
   IMAGE = 'IMAGE',
@@ -46,10 +47,11 @@ export interface Channel {
   type: 'channel' | 'dm' | 'ai';
   unreadCount?: number;
   lastMessage?: string;
-  lastMessageTime?: number; // Added for notifications
-  lastMessageSender?: string; // Added to prevent notifying own messages
+  lastMessageTime?: number; 
+  lastMessageSender?: string; 
   avatar?: string;
   isFriend?: boolean; 
+  otherUserId?: string; // ID của người dùng kia trong DM (dùng để bắt đầu chat từ danh bạ)
 }
 
 export interface AIConfig {

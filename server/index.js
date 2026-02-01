@@ -3,6 +3,7 @@ const { Pool } = require('pg');
 const cors = require('cors');
 const bcrypt = require('bcryptjs');
 const { v4: uuidv4 } = require('uuid');
+const crypto = require('crypto');
 
 const app = express();
 const port = 3001; 
@@ -187,9 +188,12 @@ app.post('/api/friends/accept', async (req, res) => {
 app.post('/api/channels/dm', async (req, res) => {
     const { user1Id, user2Id } = req.body;
     
-    // Quy ước ID kênh DM = dm_minID_maxID
+    // Quy ước ID kênh DM = dm_HASH(u1_u2) để đảm bảo độ dài < 50 ký tự
     const [u1, u2] = user1Id < user2Id ? [user1Id, user2Id] : [user2Id, user1Id];
-    const channelId = `dm_${u1}_${u2}`;
+    
+    // Sử dụng MD5 để tạo hash ngắn (32 ký tự)
+    const hash = crypto.createHash('md5').update(`${u1}_${u2}`).digest('hex');
+    const channelId = `dm_${hash}`;
 
     try {
         // Kiểm tra kênh tồn tại chưa
@@ -217,8 +221,7 @@ app.post('/api/channels/dm', async (req, res) => {
 app.get('/api/channels/:userId', async (req, res) => {
     const { userId } = req.params;
     try {
-        // 1. Lấy các kênh User tham gia (bao gồm Group và DM đã chat)
-        // Updated query to fetch timestamp and sender for notification logic
+        // 1. Lấy các kênh User ĐÃ tham gia (bao gồm Group và DM đã chat)
         const channelsQuery = `
             SELECT c.*, 
             (SELECT content FROM messages m WHERE m.channel_id = c.id ORDER BY timestamp DESC LIMIT 1) as "lastMessage",
@@ -230,14 +233,18 @@ app.get('/api/channels/:userId', async (req, res) => {
         `;
         const channelsRes = await pool.query(channelsQuery, [userId]);
         
-        // Format lại dữ liệu kênh
-        const channels = await Promise.all(channelsRes.rows.map(async (c) => {
+        const existingChannelIds = new Set(channelsRes.rows.map(c => c.id));
+        let channels = [];
+
+        // Xử lý các kênh đã có
+        const processedChannels = await Promise.all(channelsRes.rows.map(async (c) => {
              let name = c.name;
              let avatar = c.avatar_url;
              let isFriend = false;
+             let otherUserId = null;
 
              if (c.type === 'dm') {
-                 // Tìm người còn lại trong DM để lấy tên và avatar
+                 // Tìm người còn lại trong DM
                  const otherMember = await pool.query(
                      'SELECT u.id, u.full_name, u.avatar_url FROM channel_members cm JOIN users u ON cm.user_id = u.id WHERE cm.channel_id = $1 AND cm.user_id != $2',
                      [c.id, userId]
@@ -246,6 +253,7 @@ app.get('/api/channels/:userId', async (req, res) => {
                      const otherUser = otherMember.rows[0];
                      name = otherUser.full_name;
                      avatar = otherUser.avatar_url || getUserAvatar(name);
+                     otherUserId = otherUser.id;
                      
                      // Check friendship
                      const friendCheck = await pool.query(
@@ -264,10 +272,44 @@ app.get('/api/channels/:userId', async (req, res) => {
                  lastMessageTime: c.lastMessageTime ? parseInt(c.lastMessageTime) : 0,
                  lastMessageSender: c.lastMessageSender,
                  avatar: avatar,
-                 isFriend: isFriend
+                 isFriend: isFriend,
+                 otherUserId: otherUserId
              };
         }));
         
+        channels = [...processedChannels];
+
+        // 2. Lấy danh sách bạn bè (để hiển thị trong danh bạ ngay cả khi chưa có channel)
+        const friendsQuery = `
+            SELECT u.id, u.full_name, u.avatar_url 
+            FROM friendships f
+            JOIN users u ON (f.user_id_1 = u.id OR f.user_id_2 = u.id)
+            WHERE (f.user_id_1 = $1 OR f.user_id_2 = $1) AND u.id != $1
+        `;
+        const friendsRes = await pool.query(friendsQuery, [userId]);
+
+        // Merge bạn bè chưa có chat vào danh sách
+        for (const friend of friendsRes.rows) {
+            // Tính toán ID kênh DM dự kiến
+            const [u1, u2] = userId < friend.id ? [userId, friend.id] : [friend.id, userId];
+            const hash = crypto.createHash('md5').update(`${u1}_${u2}`).digest('hex');
+            const expectedChannelId = `dm_${hash}`;
+
+            // Nếu chưa có trong danh sách kênh, thêm vào dưới dạng "ảo"
+            if (!existingChannelIds.has(expectedChannelId)) {
+                channels.push({
+                    id: expectedChannelId,
+                    name: friend.full_name,
+                    type: 'dm',
+                    lastMessage: 'Các bạn đã trở thành bạn bè',
+                    lastMessageTime: 0,
+                    avatar: friend.avatar_url || getUserAvatar(friend.full_name),
+                    isFriend: true,
+                    otherUserId: friend.id // Quan trọng để Start Chat
+                });
+            }
+        }
+
         // Thêm kênh AI mặc định nếu chưa có
         if (!channels.find(c => c.type === 'ai')) {
              channels.unshift({ id: 'ai-assistant', name: 'AI Assistant', type: 'ai', avatar: null });

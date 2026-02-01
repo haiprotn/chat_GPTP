@@ -10,9 +10,11 @@ interface SidebarProps {
   onLogout: () => void;
   isMobileView?: boolean;
   onOpenAddFriend: () => void;
+  onRefresh?: () => void; // New prop to trigger data reload
+  onStartChat?: (userId: string) => void; // New prop to init chat
 }
 
-const Sidebar: React.FC<SidebarProps> = ({ channels, activeChannelId, onSelectChannel, currentUser, onLogout, isMobileView, onOpenAddFriend }) => {
+const Sidebar: React.FC<SidebarProps> = ({ channels, activeChannelId, onSelectChannel, currentUser, onLogout, isMobileView, onOpenAddFriend, onRefresh, onStartChat }) => {
   const [activeTab, setActiveTab] = useState<'messages' | 'contacts'>('messages');
   const [searchTerm, setSearchTerm] = useState('');
   const [friendRequests, setFriendRequests] = useState<FriendRequest[]>([]);
@@ -43,14 +45,17 @@ const Sidebar: React.FC<SidebarProps> = ({ channels, activeChannelId, onSelectCh
           });
           // Remove from local list
           setFriendRequests(prev => prev.filter(r => r.id !== req.id));
+          // Refresh channel list to show new friend
+          if (onRefresh) onRefresh();
       } catch (e) { console.error(e); }
   };
 
   // Logic hiển thị
   const renderContent = () => {
     if (activeTab === 'contacts') {
-        // --- CONTACTS TAB: Show Requests + Friends (Friends are technically DM channels in this simple app logic) ---
+        // --- CONTACTS TAB: Show Requests + Friends ---
         const friendChannels = channels.filter(c => c.type === 'dm' && c.isFriend);
+        const filteredFriends = friendChannels.filter(c => c.name.toLowerCase().includes(searchTerm.toLowerCase()));
         
         return (
             <div className="pb-4">
@@ -60,7 +65,7 @@ const Sidebar: React.FC<SidebarProps> = ({ channels, activeChannelId, onSelectCh
                         <h4 className="px-4 py-2 text-xs font-bold text-gray-500 uppercase tracking-wider bg-gray-50">Lời mời kết bạn ({friendRequests.length})</h4>
                         <ul>
                             {friendRequests.map(req => (
-                                <li key={req.id} className="px-4 py-3 flex items-center justify-between hover:bg-gray-50">
+                                <li key={req.id} className="px-4 py-3 flex items-center justify-between hover:bg-gray-50 border-b border-gray-50">
                                     <div className="flex items-center space-x-3">
                                         <img src={req.senderAvatar} className="w-10 h-10 rounded-full" alt=""/>
                                         <div>
@@ -79,15 +84,30 @@ const Sidebar: React.FC<SidebarProps> = ({ channels, activeChannelId, onSelectCh
                 )}
 
                 {/* Friend List Section */}
-                 <h4 className="px-4 py-2 text-xs font-bold text-gray-500 uppercase tracking-wider bg-gray-50">Bạn bè ({friendChannels.length})</h4>
-                 {friendChannels.length === 0 ? (
-                     <div className="p-4 text-center text-sm text-gray-400">Chưa có bạn bè nào</div>
+                 <h4 className="px-4 py-2 text-xs font-bold text-gray-500 uppercase tracking-wider bg-gray-50">Bạn bè ({filteredFriends.length})</h4>
+                 {filteredFriends.length === 0 ? (
+                     <div className="p-4 text-center text-sm text-gray-400">
+                        {searchTerm ? 'Không tìm thấy kết quả' : 'Chưa có bạn bè nào'}
+                     </div>
                  ) : (
                      <ul>
-                        {friendChannels.map(channel => (
+                        {filteredFriends.map(channel => (
                             <li key={channel.id}>
-                                <button onClick={() => onSelectChannel(channel.id)} className="w-full flex items-center px-4 py-2 hover:bg-gray-50">
-                                    <img src={channel.avatar} className="w-10 h-10 rounded-full border border-gray-200 mr-3" alt="" />
+                                <button 
+                                    onClick={() => {
+                                        // Nếu có otherUserId (bạn bè) thì dùng onStartChat để đảm bảo DB record được tạo
+                                        if (channel.otherUserId && onStartChat) {
+                                            onStartChat(channel.otherUserId);
+                                        } else {
+                                            onSelectChannel(channel.id);
+                                        }
+                                    }} 
+                                    className="w-full flex items-center px-4 py-2 hover:bg-gray-50 transition-colors"
+                                >
+                                    <div className="relative">
+                                        <img src={channel.avatar} className="w-10 h-10 rounded-full border border-gray-200 mr-3" alt="" />
+                                        <span className="absolute bottom-0 right-3 w-2.5 h-2.5 bg-green-500 border-2 border-white rounded-full"></span>
+                                    </div>
                                     <span className="text-sm font-medium text-gray-900">{channel.name}</span>
                                 </button>
                             </li>
@@ -135,7 +155,9 @@ const Sidebar: React.FC<SidebarProps> = ({ channels, activeChannelId, onSelectCh
                                 <h3 className={`truncate text-[15px] ${isActive ? 'font-bold text-blue-900' : 'font-medium text-gray-900'}`}>
                                     {channel.name}
                                 </h3>
-                                <span className="text-[11px] text-gray-400 font-medium">12:30</span>
+                                <span className="text-[11px] text-gray-400 font-medium">
+                                    {channel.lastMessageTime ? new Date(channel.lastMessageTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : ''}
+                                </span>
                             </div>
                             <div className="flex justify-between items-center">
                                 <p className={`truncate text-[13px] pr-2 ${channel.unreadCount ? 'font-semibold text-gray-800' : 'text-gray-500'}`}>
