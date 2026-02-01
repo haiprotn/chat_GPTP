@@ -218,9 +218,12 @@ app.get('/api/channels/:userId', async (req, res) => {
     const { userId } = req.params;
     try {
         // 1. Lấy các kênh User tham gia (bao gồm Group và DM đã chat)
+        // Updated query to fetch timestamp and sender for notification logic
         const channelsQuery = `
             SELECT c.*, 
-            (SELECT content FROM messages m WHERE m.channel_id = c.id ORDER BY timestamp DESC LIMIT 1) as "lastMessage"
+            (SELECT content FROM messages m WHERE m.channel_id = c.id ORDER BY timestamp DESC LIMIT 1) as "lastMessage",
+            (SELECT timestamp FROM messages m WHERE m.channel_id = c.id ORDER BY timestamp DESC LIMIT 1) as "lastMessageTime",
+            (SELECT sender_id FROM messages m WHERE m.channel_id = c.id ORDER BY timestamp DESC LIMIT 1) as "lastMessageSender"
             FROM channels c
             JOIN channel_members cm ON c.id = cm.channel_id
             WHERE cm.user_id = $1
@@ -258,6 +261,8 @@ app.get('/api/channels/:userId', async (req, res) => {
                  name: name,
                  type: c.type,
                  lastMessage: c.lastMessage || (c.type === 'ai' ? 'Sẵn sàng hỗ trợ' : 'Chưa có tin nhắn'),
+                 lastMessageTime: c.lastMessageTime ? parseInt(c.lastMessageTime) : 0,
+                 lastMessageSender: c.lastMessageSender,
                  avatar: avatar,
                  isFriend: isFriend
              };

@@ -46,8 +46,10 @@ export interface Channel {
   type: 'channel' | 'dm' | 'ai';
   unreadCount?: number;
   lastMessage?: string;
+  lastMessageTime?: number; // Added for notifications
+  lastMessageSender?: string; // Added to prevent notifying own messages
   avatar?: string;
-  isFriend?: boolean; // Cờ đánh dấu đã là bạn bè chưa (cho DM)
+  isFriend?: boolean; 
 }
 
 export interface AIConfig {

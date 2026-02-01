@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import Sidebar from './components/Sidebar';
 import ChatArea from './components/ChatArea';
 import MessageInput from './components/MessageInput';
@@ -25,11 +25,37 @@ const App: React.FC = () => {
   const [mobileTab, setMobileTab] = useState<'chats' | 'contacts' | 'me'>('chats');
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
 
+  // Store last known message timestamp for each channel to detect new ones
+  const channelTimestampsRef = useRef<Record<string, number>>({});
+
   useEffect(() => {
     const handleResize = () => setIsMobile(window.innerWidth < 768);
     window.addEventListener('resize', handleResize);
+    
+    // Request notification permission on load
+    if ('Notification' in window && Notification.permission !== 'granted') {
+       Notification.requestPermission();
+    }
+
     return () => window.removeEventListener('resize', handleResize);
   }, []);
+
+  const sendNotification = (title: string, body: string, icon?: string) => {
+    if ('Notification' in window && Notification.permission === 'granted') {
+      // Check if window is hidden (tab inactive/minimized)
+      if (document.visibilityState === 'hidden') {
+         const notification = new Notification(title, {
+           body: body,
+           icon: icon || '/vite.svg',
+           tag: 'nexchat-message' // Prevent duplicate spam
+         });
+         notification.onclick = () => {
+           window.focus();
+           notification.close();
+         };
+      }
+    }
+  };
 
   // Update logic to fetch channels specific to user (using updated backend)
   useEffect(() => {
@@ -38,7 +64,33 @@ const App: React.FC = () => {
       try {
         const response = await fetch(`${API_URL}/channels/${currentUser.id}`); // Endpoint updated to support User specific channels
         if (!response.ok) throw new Error('Network error');
-        const data = await response.json();
+        const data: Channel[] = await response.json();
+        
+        // Check for new messages for notification
+        data.forEach(ch => {
+            const prevTime = channelTimestampsRef.current[ch.id] || 0;
+            const newTime = ch.lastMessageTime || 0;
+            
+            // If new message exists AND it's newer than what we knew AND it's not sent by me
+            if (newTime > prevTime && prevTime !== 0) { // prevTime !== 0 ensures we don't notify on initial load
+                if (ch.lastMessageSender !== currentUser.name) {
+                     // Condition: Notify if tab is hidden OR if the message is from a channel NOT currently active
+                     if (document.visibilityState === 'hidden' || ch.id !== activeChannelId) {
+                         sendNotification(ch.name, ch.lastMessage || 'Tin nhắn mới', ch.avatar);
+                     }
+                }
+            }
+            // Update ref
+            channelTimestampsRef.current[ch.id] = newTime;
+        });
+
+        // Initial population of ref without notifying
+        if (Object.keys(channelTimestampsRef.current).length === 0) {
+            data.forEach(ch => {
+                channelTimestampsRef.current[ch.id] = ch.lastMessageTime || 0;
+            });
+        }
+
         setChannels(data);
       } catch (error) {
         setChannels(INITIAL_CHANNELS);
@@ -47,7 +99,7 @@ const App: React.FC = () => {
     fetchChannels();
     const interval = setInterval(fetchChannels, 5000); // Poll channels for new DMs
     return () => clearInterval(interval);
-  }, [currentUser]);
+  }, [currentUser, activeChannelId]);
 
   // Handle auto-select (only if channels load and desktop)
   useEffect(() => {
@@ -169,6 +221,8 @@ const App: React.FC = () => {
                     fileName: file ? file.name : null
                 })
             });
+            // Update local timestamp to prevent notification for own message
+            channelTimestampsRef.current[activeChannelId] = Date.now();
         } catch (error) {
             console.error("Failed to send", error);
         }
@@ -196,10 +250,6 @@ const App: React.FC = () => {
   };
 
   const handleAddFriendCurrentChat = async () => {
-      // Find the other user ID in current DM? 
-      // Simplified: AddFriendModal is the main way, or we need to extract userId from activeChannel.
-      // Since `channels` from backend doesn't store otherUserId in root, we might rely on searching for now
-      // Or simply open the Add Modal prepopulated.
       setShowAddFriend(true);
   };
 
