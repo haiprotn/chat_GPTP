@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { User } from '../types';
-import { Bot, Lock, User as UserIcon, Type, ArrowRight, Loader2 } from 'lucide-react';
+import { Bot, Lock, User as UserIcon, Type, ArrowRight, Loader2, Phone } from 'lucide-react';
 
 interface AuthPageProps {
   onLoginSuccess: (user: User) => void;
@@ -14,6 +14,7 @@ const AuthPage: React.FC<AuthPageProps> = ({ onLoginSuccess }) => {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [fullName, setFullName] = useState('');
+  const [phoneNumber, setPhoneNumber] = useState('');
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -22,7 +23,9 @@ const AuthPage: React.FC<AuthPageProps> = ({ onLoginSuccess }) => {
 
     const API_URL = '/api';
     const endpoint = isLogin ? '/login' : '/register';
-    const body = isLogin ? { username, password } : { username, password, fullName };
+    const body = isLogin 
+        ? { username, password } 
+        : { username, password, fullName, phoneNumber };
 
     try {
       const response = await fetch(`${API_URL}${endpoint}`, {
@@ -40,19 +43,22 @@ const AuthPage: React.FC<AuthPageProps> = ({ onLoginSuccess }) => {
           id: userData.id,
           name: userData.name || userData.full_name,
           avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(userData.name || userData.full_name)}&background=0D8ABC&color=fff`,
-          status: 'online'
+          status: 'online',
+          phoneNumber: userData.phone_number
       });
 
     } catch (err: any) {
         console.error("Auth Error:", err);
-        // Fallback demo
+        // Fallback demo logic removed for production-like behavior, 
+        // or keep strictly for network failures if backend isn't running.
         if (err.message && (err.message.includes("Failed to fetch") || err.message.includes("NetworkError"))) {
              setTimeout(() => {
                  onLoginSuccess({
                      id: 'demo-user',
                      name: isLogin ? (username || 'Demo User') : (fullName || 'Demo User'),
                      avatar: 'https://ui-avatars.com/api/?name=Demo&background=0068ff&color=fff',
-                     status: 'online'
+                     status: 'online',
+                     phoneNumber: phoneNumber
                  });
              }, 1000);
         } else {
@@ -82,17 +88,29 @@ const AuthPage: React.FC<AuthPageProps> = ({ onLoginSuccess }) => {
                 )}
 
                 {!isLogin && (
-                    <div className="relative">
-                        <Type className="absolute left-3 top-3.5 text-gray-400" size={18} />
-                        <input 
-                            type="text" 
-                            required 
-                            value={fullName}
-                            onChange={(e) => setFullName(e.target.value)}
-                            className="w-full pl-10 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none text-sm font-medium"
-                            placeholder="Họ và tên hiển thị"
-                        />
-                    </div>
+                    <>
+                        <div className="relative">
+                            <Type className="absolute left-3 top-3.5 text-gray-400" size={18} />
+                            <input 
+                                type="text" 
+                                required 
+                                value={fullName}
+                                onChange={(e) => setFullName(e.target.value)}
+                                className="w-full pl-10 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none text-sm font-medium"
+                                placeholder="Họ và tên hiển thị"
+                            />
+                        </div>
+                        <div className="relative">
+                            <Phone className="absolute left-3 top-3.5 text-gray-400" size={18} />
+                            <input 
+                                type="tel" 
+                                value={phoneNumber}
+                                onChange={(e) => setPhoneNumber(e.target.value)}
+                                className="w-full pl-10 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none text-sm font-medium"
+                                placeholder="Số điện thoại (Tùy chọn)"
+                            />
+                        </div>
+                    </>
                 )}
 
                 <div className="relative">

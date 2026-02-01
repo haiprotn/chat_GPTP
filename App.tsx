@@ -202,8 +202,10 @@ const App: React.FC = () => {
                 updateAiMessage(aiMsgId, fullText, true);
             }
             updateAiMessage(aiMsgId, fullText, false);
-        } catch (error) {
-            updateAiMessage(aiMsgId, "Lỗi kết nối AI.", false);
+        } catch (error: any) {
+            console.error("AI Error:", error);
+            const errorMessage = error instanceof Error ? error.message : "Lỗi kết nối AI.";
+            updateAiMessage(aiMsgId, `⚠️ ${errorMessage}`, false);
         } finally {
             setIsAiProcessing(false);
         }
