@@ -8,9 +8,9 @@ export default defineConfig({
     host: true, // Cho phép truy cập từ mạng LAN (0.0.0.0)
     port: 3000,
     proxy: {
-      // Mọi request bắt đầu bằng /api sẽ được chuyển tiếp sang backend port 3001
+      // Mọi request bắt đầu bằng /api sẽ được chuyển tiếp sang backend port 8000 (Python FastAPI)
       '/api': {
-        target: 'http://localhost:3001',
+        target: 'http://localhost:8000',
         changeOrigin: true,
         secure: false,
       },
