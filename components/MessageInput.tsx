@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Send, Paperclip, Image as ImageIcon, Smile, MoreHorizontal, X } from 'lucide-react';
-import EmojiPicker, { EmojiClickData } from 'emoji-picker-react';
+import CustomEmojiPicker from './CustomEmojiPicker';
 
 interface MessageInputProps {
   onSendMessage: (text: string, file?: File) => void;
@@ -38,8 +38,8 @@ const MessageInput: React.FC<MessageInputProps> = ({ onSendMessage, disabled, pl
     }
   };
 
-  const onEmojiClick = (emojiData: EmojiClickData) => {
-    setText((prev) => prev + emojiData.emoji);
+  const onEmojiClick = (emoji: string) => {
+    setText((prev) => prev + emoji);
   };
 
   return (
@@ -51,14 +51,8 @@ const MessageInput: React.FC<MessageInputProps> = ({ onSendMessage, disabled, pl
             {/* Backdrop to close on click outside */}
             <div className="fixed inset-0 z-40" onClick={() => setShowEmojiPicker(false)}></div>
             
-            <div className="absolute bottom-full left-2 mb-2 z-50 shadow-2xl rounded-xl border border-gray-200 bg-white">
-                <EmojiPicker 
-                    onEmojiClick={onEmojiClick}
-                    autoFocusSearch={false}
-                    width={300}
-                    height={400}
-                    previewConfig={{ showPreview: false }}
-                />
+            <div className="absolute bottom-full left-2 mb-2 z-50">
+                <CustomEmojiPicker onEmojiClick={onEmojiClick} />
             </div>
         </>
       )}
