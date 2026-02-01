@@ -1,0 +1,8 @@
+{
+  "name": "NexChat AI",
+  "description": "Một ứng dụng chat nội bộ chuyên nghiệp tích hợp trợ lý AI Gemini, hỗ trợ đa nền tảng.",
+  "requestFramePermissions": [
+    "microphone",
+    "camera"
+  ]
+}
