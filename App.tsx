@@ -3,6 +3,7 @@ import Sidebar from './components/Sidebar';
 import ChatArea from './components/ChatArea';
 import MessageInput from './components/MessageInput';
 import VideoCallModal from './components/VideoCallModal';
+import AddFriendModal from './components/AddFriendModal'; // New Modal
 import AuthPage from './components/AuthPage';
 import { Channel, Message, MessageType, SenderType, User } from './types';
 import { sendMessageStream } from './services/geminiService';
@@ -15,15 +16,13 @@ const generateId = () => Math.random().toString(36).substr(2, 9);
 const App: React.FC = () => {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [channels, setChannels] = useState<Channel[]>([]);
-  const [activeChannelId, setActiveChannelId] = useState<string | null>(null); // Nullable for mobile state
+  const [activeChannelId, setActiveChannelId] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [isAiProcessing, setIsAiProcessing] = useState(false);
   const [isInCall, setIsInCall] = useState(false);
+  const [showAddFriend, setShowAddFriend] = useState(false); // Modal state
   
-  // Mobile Navigation State
   const [mobileTab, setMobileTab] = useState<'chats' | 'contacts' | 'me'>('chats');
-
-  // Detect Mobile (Simple width check for rendering logic)
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
 
   useEffect(() => {
@@ -32,31 +31,32 @@ const App: React.FC = () => {
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  // Auto select first channel on desktop
-  useEffect(() => {
-    if (!isMobile && !activeChannelId && channels.length > 0) {
-        setActiveChannelId(channels[0].id);
-    }
-  }, [channels, isMobile]);
-
-  // Load Channels
+  // Update logic to fetch channels specific to user (using updated backend)
   useEffect(() => {
     if (!currentUser) return;
     const fetchChannels = async () => {
       try {
-        const response = await fetch(`${API_URL}/channels`);
+        const response = await fetch(`${API_URL}/channels/${currentUser.id}`); // Endpoint updated to support User specific channels
         if (!response.ok) throw new Error('Network error');
         const data = await response.json();
         setChannels(data);
-        if (!data.find((c: Channel) => c.type === 'ai')) {
-            setChannels(prev => [{ id: 'ai-assistant', name: 'AI Assistant', type: 'ai' }, ...prev]);
-        }
       } catch (error) {
         setChannels(INITIAL_CHANNELS);
       }
     };
     fetchChannels();
+    const interval = setInterval(fetchChannels, 5000); // Poll channels for new DMs
+    return () => clearInterval(interval);
   }, [currentUser]);
+
+  // Handle auto-select (only if channels load and desktop)
+  useEffect(() => {
+     if (!isMobile && !activeChannelId && channels.length > 0) {
+        // Prefer AI or first channel
+        const defaultCh = channels.find(c => c.type === 'ai') || channels[0];
+        setActiveChannelId(defaultCh.id);
+     }
+  }, [channels, isMobile]);
 
   const activeChannel = channels.find(c => c.id === activeChannelId);
 
@@ -95,8 +95,7 @@ const App: React.FC = () => {
         }));
         setMessages(formattedMessages);
       } catch (error) {
-        const mockMsgs = MOCK_MESSAGES[activeChannelId] || [];
-        setMessages(mockMsgs);
+        setMessages([]);
       }
     };
 
@@ -104,7 +103,7 @@ const App: React.FC = () => {
     const interval = setInterval(fetchMessages, 3000);
     return () => clearInterval(interval);
 
-  }, [activeChannelId, activeChannel, currentUser]);
+  }, [activeChannelId, activeChannel?.id, currentUser]); // Use ID dependency safely
 
   const updateAiMessage = useCallback((messageId: string, content: string, isStreaming: boolean) => {
     setMessages(prev => prev.map(msg => msg.id === messageId ? { ...msg, content, isStreaming } : msg));
@@ -176,18 +175,40 @@ const App: React.FC = () => {
     }
   };
 
+  const handleStartChat = async (targetUserId: string) => {
+      if (!currentUser) return;
+      try {
+          const res = await fetch(`${API_URL}/channels/dm`, {
+              method: 'POST',
+              headers: {'Content-Type': 'application/json'},
+              body: JSON.stringify({ user1Id: currentUser.id, user2Id: targetUserId })
+          });
+          const channel = await res.json();
+          // Force reload channels or manually add to state
+          setChannels(prev => {
+              if (prev.find(p => p.id === channel.id)) return prev;
+              return [channel, ...prev]; // Add to top
+          });
+          setActiveChannelId(channel.id);
+      } catch (e) {
+          console.error("Cannot create DM", e);
+      }
+  };
+
+  const handleAddFriendCurrentChat = async () => {
+      // Find the other user ID in current DM? 
+      // Simplified: AddFriendModal is the main way, or we need to extract userId from activeChannel.
+      // Since `channels` from backend doesn't store otherUserId in root, we might rely on searching for now
+      // Or simply open the Add Modal prepopulated.
+      setShowAddFriend(true);
+  };
+
   if (!currentUser) return <AuthPage onLoginSuccess={setCurrentUser} />;
 
   return (
     <div className="flex h-[100dvh] w-screen overflow-hidden bg-white">
       
-      {/* 
-        LAYOUT STRATEGY:
-        - Mobile: Sidebar is visible. If a channel is selected, ChatArea overlays everything (fixed).
-        - Desktop: Sidebar (w-80) | ChatArea (flex-1)
-      */}
-
-      {/* --- SIDEBAR AREA (Desktop: Always, Mobile: Only if no chat active or active but z-index lower) --- */}
+      {/* Sidebar */}
       <div className={`
         flex-shrink-0 w-full md:w-80 h-full bg-white z-0
         ${isMobile && activeChannelId ? 'hidden' : 'block'} 
@@ -200,49 +221,30 @@ const App: React.FC = () => {
             currentUser={currentUser}
             onLogout={() => setCurrentUser(null)}
             isMobileView={isMobile}
+            onOpenAddFriend={() => setShowAddFriend(true)}
           />
           
-          {/* Mobile Bottom Nav */}
           <div className="md:hidden h-14 bg-white border-t border-gray-200 flex justify-around items-center absolute bottom-0 w-full z-10 safe-bottom">
-             <button 
-                onClick={() => setMobileTab('chats')} 
-                className={`flex flex-col items-center p-1 ${mobileTab === 'chats' ? 'text-blue-600' : 'text-gray-400'}`}
-             >
-                <MessageCircle size={22} fill={mobileTab === 'chats' ? "currentColor" : "none"} />
-                <span className="text-[10px] font-medium mt-0.5">Tin nhắn</span>
-             </button>
-             <button 
-                onClick={() => setMobileTab('contacts')} 
-                className={`flex flex-col items-center p-1 ${mobileTab === 'contacts' ? 'text-blue-600' : 'text-gray-400'}`}
-             >
-                <Users size={22} />
-                <span className="text-[10px] font-medium mt-0.5">Danh bạ</span>
-             </button>
-             <button 
-                onClick={() => setMobileTab('me')} 
-                className={`flex flex-col items-center p-1 ${mobileTab === 'me' ? 'text-blue-600' : 'text-gray-400'}`}
-             >
-                <UserIcon size={22} />
-                <span className="text-[10px] font-medium mt-0.5">Cá nhân</span>
-             </button>
+             <button onClick={() => setMobileTab('chats')} className={`flex flex-col items-center p-1 ${mobileTab === 'chats' ? 'text-blue-600' : 'text-gray-400'}`}><MessageCircle size={22} /><span className="text-[10px] mt-0.5">Tin nhắn</span></button>
+             <button onClick={() => { setMobileTab('contacts'); }} className={`flex flex-col items-center p-1 ${mobileTab === 'contacts' ? 'text-blue-600' : 'text-gray-400'}`}><Users size={22} /><span className="text-[10px] mt-0.5">Danh bạ</span></button>
+             <button onClick={() => setMobileTab('me')} className={`flex flex-col items-center p-1 ${mobileTab === 'me' ? 'text-blue-600' : 'text-gray-400'}`}><UserIcon size={22} /><span className="text-[10px] mt-0.5">Cá nhân</span></button>
           </div>
       </div>
       
-      {/* --- CHAT AREA (Desktop: Flex-1, Mobile: Overlay Full Screen) --- */}
+      {/* Chat Area */}
       {activeChannelId && (
         <main className={`
             flex flex-col bg-[#eef0f1]
-            ${isMobile 
-                ? 'fixed inset-0 z-50 w-full h-[100dvh]' // Mobile Overlay
-                : 'flex-1 min-w-0 h-full relative' // Desktop Flex
-            }
+            ${isMobile ? 'fixed inset-0 z-50 w-full h-[100dvh]' : 'flex-1 min-w-0 h-full relative'}
         `}>
             <ChatArea 
                 messages={messages} 
                 activeChannelName={activeChannel?.name || 'Loading...'}
                 isAiChannel={activeChannel?.type === 'ai'}
+                isFriend={activeChannel?.isFriend}
                 onBackToMenu={() => setActiveChannelId(null)}
                 onStartCall={() => setIsInCall(true)}
+                onAddFriend={handleAddFriendCurrentChat}
             />
             <MessageInput 
                 onSendMessage={handleSendMessage} 
@@ -257,6 +259,15 @@ const App: React.FC = () => {
             isAiCall={activeChannel.type === 'ai'}
             onEndCall={() => setIsInCall(false)}
         />
+      )}
+
+      {/* Add Friend Modal */}
+      {showAddFriend && (
+          <AddFriendModal 
+            onClose={() => setShowAddFriend(false)}
+            currentUserId={currentUser.id}
+            onStartChat={handleStartChat}
+          />
       )}
     </div>
   );

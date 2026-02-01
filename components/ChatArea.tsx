@@ -1,17 +1,19 @@
 import React, { useEffect, useRef } from 'react';
 import { Message, SenderType } from '../types';
 import ReactMarkdown from 'react-markdown';
-import { Bot, Video, Phone, ArrowLeft, MoreHorizontal, Image as ImageIcon, Paperclip } from 'lucide-react';
+import { Bot, Video, Phone, ArrowLeft, MoreHorizontal, Image as ImageIcon, Paperclip, UserPlus } from 'lucide-react';
 
 interface ChatAreaProps {
   messages: Message[];
   activeChannelName: string;
   isAiChannel: boolean;
-  onBackToMenu: () => void; // Cho mobile
+  onBackToMenu: () => void;
   onStartCall: () => void;
+  isFriend?: boolean; // New prop to check friendship status
+  onAddFriend?: () => void; // Callback to add friend
 }
 
-const ChatArea: React.FC<ChatAreaProps> = ({ messages, activeChannelName, isAiChannel, onBackToMenu, onStartCall }) => {
+const ChatArea: React.FC<ChatAreaProps> = ({ messages, activeChannelName, isAiChannel, onBackToMenu, onStartCall, isFriend, onAddFriend }) => {
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = () => {
@@ -25,10 +27,9 @@ const ChatArea: React.FC<ChatAreaProps> = ({ messages, activeChannelName, isAiCh
   return (
     <div className="flex flex-col h-full bg-[#eef0f1] relative">
       
-      {/* Header - Zalo Style (Trắng, Clean) */}
+      {/* Header */}
       <header className="h-16 flex items-center justify-between px-3 md:px-4 bg-white border-b border-gray-200 shadow-sm z-20">
         <div className="flex items-center">
-          {/* Nút Back chỉ hiện trên Mobile thông qua điều khiển từ App.tsx nhưng ở đây ta cứ render, App sẽ ẩn hiện ChatArea */}
           <button onClick={onBackToMenu} className="mr-3 md:hidden p-2 -ml-2 text-gray-600 hover:bg-gray-100 rounded-full">
             <ArrowLeft size={22} />
           </button>
@@ -59,7 +60,6 @@ const ChatArea: React.FC<ChatAreaProps> = ({ messages, activeChannelName, isAiCh
           </div>
         </div>
 
-        {/* Right Actions */}
         <div className="flex items-center space-x-1 sm:space-x-2 text-gray-600">
              <button onClick={onStartCall} className="p-2 hover:bg-gray-100 rounded-full transition-colors">
                 <Phone size={20} />
@@ -73,9 +73,23 @@ const ChatArea: React.FC<ChatAreaProps> = ({ messages, activeChannelName, isAiCh
         </div>
       </header>
 
+      {/* Stranger Notification Banner */}
+      {!isAiChannel && isFriend === false && (
+          <div className="bg-white border-b border-gray-200 px-4 py-2 flex items-center justify-between shadow-sm z-10">
+              <div className="text-sm text-gray-600">
+                  Bạn chưa kết bạn với <strong>{activeChannelName}</strong>.
+              </div>
+              <button 
+                onClick={onAddFriend}
+                className="text-xs bg-blue-50 text-blue-600 px-3 py-1.5 rounded-full font-medium hover:bg-blue-100 flex items-center"
+              >
+                  <UserPlus size={14} className="mr-1" /> Kết bạn
+              </button>
+          </div>
+      )}
+
       {/* Messages List */}
       <div className="flex-1 overflow-y-auto p-4 space-y-4 md:space-y-6 bg-[#b2c7d6]/10">
-        {/* Nền background pattern mờ nếu muốn */}
         
         {messages.length === 0 && (
             <div className="flex flex-col items-center justify-center h-full text-gray-400 opacity-70">
@@ -83,6 +97,10 @@ const ChatArea: React.FC<ChatAreaProps> = ({ messages, activeChannelName, isAiCh
                     {isAiChannel ? <Bot size={40} className="text-blue-400" /> : <ImageIcon size={40} className="text-gray-300" />}
                 </div>
                 <p className="text-sm font-medium">Bắt đầu trò chuyện ngay bây giờ</p>
+                {/* Notice for strangers */}
+                {!isAiChannel && isFriend === false && (
+                    <p className="text-xs mt-2 text-gray-400">Tin nhắn từ người lạ</p>
+                )}
             </div>
         )}
 
@@ -122,7 +140,7 @@ const ChatArea: React.FC<ChatAreaProps> = ({ messages, activeChannelName, isAiCh
                     className={`
                       relative px-4 py-2.5 shadow-sm text-[15px] leading-relaxed break-words
                       ${isMe 
-                        ? 'bg-[#0068ff] text-white rounded-2xl rounded-tr-sm' // Zalo Blue
+                        ? 'bg-[#0068ff] text-white rounded-2xl rounded-tr-sm' 
                         : 'bg-white text-gray-800 rounded-2xl rounded-tl-sm border border-gray-100'
                       }
                     `}
@@ -139,7 +157,6 @@ const ChatArea: React.FC<ChatAreaProps> = ({ messages, activeChannelName, isAiCh
                         {msg.isStreaming && <span className="inline-block w-1.5 h-3.5 ml-1 bg-current opacity-70 animate-pulse align-middle">|</span>}
                      </div>
 
-                    {/* File Attachment */}
                     {msg.type === 'FILE' && msg.fileName && (
                          <div className={`flex items-center mt-2 p-2 rounded-lg ${isMe ? 'bg-white/20' : 'bg-gray-100'} max-w-full`}>
                             <Paperclip size={18} className="flex-shrink-0 mr-2 opacity-80" />
@@ -148,7 +165,6 @@ const ChatArea: React.FC<ChatAreaProps> = ({ messages, activeChannelName, isAiCh
                     )}
                   </div>
                   
-                  {/* Timestamp - Only show on hover or for last message */}
                   <span className="text-[10px] text-gray-400 mt-1 mx-1 opacity-0 group-hover:opacity-100 transition-opacity">
                     {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                   </span>

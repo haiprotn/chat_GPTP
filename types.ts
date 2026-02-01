@@ -15,6 +15,17 @@ export interface User {
   name: string;
   avatar: string;
   status: 'online' | 'offline' | 'busy';
+  username?: string;
+  phoneNumber?: string;
+}
+
+export interface FriendRequest {
+  id: string;
+  senderId: string;
+  senderName: string;
+  senderAvatar: string;
+  status: 'PENDING' | 'ACCEPTED' | 'REJECTED';
+  createdAt: string;
 }
 
 export interface Message {
@@ -35,7 +46,8 @@ export interface Channel {
   type: 'channel' | 'dm' | 'ai';
   unreadCount?: number;
   lastMessage?: string;
-  avatar?: string; // For DMs
+  avatar?: string;
+  isFriend?: boolean; // Cờ đánh dấu đã là bạn bè chưa (cho DM)
 }
 
 export interface AIConfig {
