@@ -21,7 +21,10 @@ const AuthPage: React.FC<AuthPageProps> = ({ onLoginSuccess }) => {
     setError('');
     setIsLoading(true);
 
-    const API_URL = 'http://localhost:3001/api';
+    // Dynamic API URL based on current hostname (localhost or IP)
+    const hostname = window.location.hostname;
+    const API_URL = `http://${hostname}:3001/api`;
+
     const endpoint = isLogin ? '/login' : '/register';
     const body = isLogin 
         ? { username, password }
