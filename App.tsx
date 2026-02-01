@@ -8,12 +8,9 @@ import { Channel, Message, MessageType, SenderType, User } from './types';
 import { sendMessageStream } from './services/geminiService';
 import { INITIAL_CHANNELS, MOCK_MESSAGES } from './constants';
 
-// API Configuration - Dynamic Hostname
-// This ensures that if you access via 192.168.x.x, the API calls also go to 192.168.x.x
-const getApiUrl = () => {
-  const hostname = window.location.hostname;
-  return `http://${hostname}:3001/api`;
-};
+// API Configuration
+// Sử dụng đường dẫn tương đối. Vite Proxy sẽ tự chuyển hướng về http://localhost:3001/api
+const API_URL = '/api';
 
 // Fallback ID generator
 const generateId = () => Math.random().toString(36).substr(2, 9);
@@ -36,7 +33,7 @@ const App: React.FC = () => {
 
     const fetchChannels = async () => {
       try {
-        const response = await fetch(`${getApiUrl()}/channels`);
+        const response = await fetch(`${API_URL}/channels`);
         if (!response.ok) throw new Error('Network response was not ok');
         
         const data = await response.json();
@@ -79,7 +76,7 @@ const App: React.FC = () => {
 
     const fetchMessages = async () => {
       try {
-        const response = await fetch(`${getApiUrl()}/messages/${activeChannelId}`);
+        const response = await fetch(`${API_URL}/messages/${activeChannelId}`);
         if (!response.ok) throw new Error('Network response was not ok');
         
         const data = await response.json();
@@ -181,7 +178,7 @@ const App: React.FC = () => {
     } else {
         // --- NORMAL CHAT LOGIC (Send to Backend DB) ---
         try {
-            const response = await fetch(`${getApiUrl()}/messages`, {
+            const response = await fetch(`${API_URL}/messages`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({

@@ -21,9 +21,8 @@ const AuthPage: React.FC<AuthPageProps> = ({ onLoginSuccess }) => {
     setError('');
     setIsLoading(true);
 
-    // Dynamic API URL based on current hostname (localhost or IP)
-    const hostname = window.location.hostname;
-    const API_URL = `http://${hostname}:3001/api`;
+    // Use relative path - Vite Proxy will handle forwarding to Backend
+    const API_URL = '/api';
 
     const endpoint = isLogin ? '/login' : '/register';
     const body = isLogin 
@@ -64,9 +63,9 @@ const AuthPage: React.FC<AuthPageProps> = ({ onLoginSuccess }) => {
 
     } catch (err: any) {
         console.error("Auth Error:", err);
-        setError(err.message);
+        setError(err.message || "Lỗi kết nối");
         // Fallback for Demo without Backend
-        if (err.message.includes("Failed to fetch")) {
+        if (err.message && (err.message.includes("Failed to fetch") || err.message.includes("NetworkError"))) {
              setError("Không kết nối được Server. Đang vào chế độ Demo...");
              setTimeout(() => {
                  onLoginSuccess({

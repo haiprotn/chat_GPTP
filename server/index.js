@@ -145,6 +145,8 @@ app.get('/api/channels', async (req, res) => {
   }
 });
 
-app.listen(port, () => {
-  console.log(`🚀 Server Backend đang chạy tại http://localhost:${port}`);
+// Sử dụng '0.0.0.0' để lắng nghe từ mọi IP
+app.listen(port, '0.0.0.0', () => {
+  console.log(`🚀 Server Backend đang chạy tại http://0.0.0.0:${port}`);
+  console.log(`   (Nếu truy cập từ LAN, hãy dùng IP của máy này)`);
 });
