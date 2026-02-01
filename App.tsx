@@ -7,69 +7,73 @@ import AuthPage from './components/AuthPage';
 import { Channel, Message, MessageType, SenderType, User } from './types';
 import { sendMessageStream } from './services/geminiService';
 import { INITIAL_CHANNELS, MOCK_MESSAGES } from './constants';
+import { MessageCircle, Users, User as UserIcon } from 'lucide-react';
 
-// API Configuration
-// Sử dụng đường dẫn tương đối. Vite Proxy sẽ tự chuyển hướng về http://localhost:3001/api
 const API_URL = '/api';
-
-// Fallback ID generator
 const generateId = () => Math.random().toString(36).substr(2, 9);
 
 const App: React.FC = () => {
-  // Auth State
   const [currentUser, setCurrentUser] = useState<User | null>(null);
-
-  // App State
   const [channels, setChannels] = useState<Channel[]>([]);
-  const [activeChannelId, setActiveChannelId] = useState<string>('ai-assistant');
+  const [activeChannelId, setActiveChannelId] = useState<string | null>(null); // Nullable for mobile state
   const [messages, setMessages] = useState<Message[]>([]);
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isAiProcessing, setIsAiProcessing] = useState(false);
   const [isInCall, setIsInCall] = useState(false);
+  
+  // Mobile Navigation State
+  const [mobileTab, setMobileTab] = useState<'chats' | 'contacts' | 'me'>('chats');
 
-  // Load Channels from Backend with Fallback
+  // Detect Mobile (Simple width check for rendering logic)
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+
   useEffect(() => {
-    if (!currentUser) return; // Only fetch if logged in
+    const handleResize = () => setIsMobile(window.innerWidth < 768);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
+  // Auto select first channel on desktop
+  useEffect(() => {
+    if (!isMobile && !activeChannelId && channels.length > 0) {
+        setActiveChannelId(channels[0].id);
+    }
+  }, [channels, isMobile]);
+
+  // Load Channels
+  useEffect(() => {
+    if (!currentUser) return;
     const fetchChannels = async () => {
       try {
         const response = await fetch(`${API_URL}/channels`);
-        if (!response.ok) throw new Error('Network response was not ok');
-        
+        if (!response.ok) throw new Error('Network error');
         const data = await response.json();
         setChannels(data);
-        
-        // Ensure AI assistant is always there locally if not in DB
         if (!data.find((c: Channel) => c.type === 'ai')) {
             setChannels(prev => [{ id: 'ai-assistant', name: 'AI Assistant', type: 'ai' }, ...prev]);
         }
       } catch (error) {
-        console.warn("Backend unreachable, switching to offline mode:", error);
-        // Fallback to mock data if DB is down or unreachable
         setChannels(INITIAL_CHANNELS);
       }
     };
     fetchChannels();
   }, [currentUser]);
 
-  const activeChannel = channels.find(c => c.id === activeChannelId) || channels[0] || { id: 'loading', name: 'Loading...', type: 'channel' };
+  const activeChannel = channels.find(c => c.id === activeChannelId);
 
-  // Load Messages when active channel changes
+  // Load Messages
   useEffect(() => {
-    if (!currentUser || !activeChannelId) return;
+    if (!currentUser || !activeChannelId || !activeChannel) return;
 
-    // AI Channel logic (Local RAM only for this demo)
     if (activeChannel.type === 'ai') {
         const aiWelcome: Message = { 
             id: 'ai-welcome', 
             channelId: 'ai-assistant', 
             senderId: 'Gemini', 
             senderType: SenderType.AI, 
-            content: `Xin chào ${currentUser.name}! Tôi có thể giúp gì cho bạn hôm nay?`, 
+            content: `Xin chào ${currentUser.name}! Tôi là trợ lý AI.`, 
             timestamp: Date.now(), 
             type: MessageType.TEXT 
         };
-        // Reset to welcome message if empty
         setMessages([aiWelcome]);
         return;
     }
@@ -77,14 +81,12 @@ const App: React.FC = () => {
     const fetchMessages = async () => {
       try {
         const response = await fetch(`${API_URL}/messages/${activeChannelId}`);
-        if (!response.ok) throw new Error('Network response was not ok');
-        
+        if (!response.ok) throw new Error('Error');
         const data = await response.json();
-        // Convert DB fields to match Frontend interface
         const formattedMessages = data.map((msg: any) => ({
             id: msg.id,
             channelId: msg.channel_id,
-            senderId: msg.sender_id, // This is the username/name string stored in DB
+            senderId: msg.sender_id,
             senderType: msg.sender_type,
             content: msg.content,
             timestamp: parseInt(msg.timestamp),
@@ -93,57 +95,42 @@ const App: React.FC = () => {
         }));
         setMessages(formattedMessages);
       } catch (error) {
-        console.warn(`Failed to fetch messages for ${activeChannelId}, using mock data.`);
-        // Fallback to mock messages
         const mockMsgs = MOCK_MESSAGES[activeChannelId] || [];
         setMessages(mockMsgs);
       }
     };
 
     fetchMessages();
-    
-    // Polling for new messages
     const interval = setInterval(fetchMessages, 3000);
     return () => clearInterval(interval);
 
-  }, [activeChannelId, activeChannel.type, currentUser]);
+  }, [activeChannelId, activeChannel, currentUser]);
 
   const updateAiMessage = useCallback((messageId: string, content: string, isStreaming: boolean) => {
-    setMessages(prev => 
-        prev.map(msg => 
-            msg.id === messageId ? { ...msg, content, isStreaming } : msg
-        )
-    );
+    setMessages(prev => prev.map(msg => msg.id === messageId ? { ...msg, content, isStreaming } : msg));
   }, []);
 
   const handleSendMessage = async (text: string, file?: File) => {
-    if (!currentUser) return;
+    if (!currentUser || !activeChannelId) return;
 
     const tempId = generateId();
-    const timestamp = Date.now();
-    
-    // 1. Prepare User Message Object
     const userMsg: Message = {
       id: tempId,
       channelId: activeChannelId,
       senderId: currentUser.name, 
       senderType: SenderType.USER,
       content: text,
-      timestamp: timestamp,
+      timestamp: Date.now(),
       type: file ? MessageType.FILE : MessageType.TEXT,
       fileName: file ? file.name : undefined
     };
 
-    // 2. Optimistic UI Update (Show immediately)
     setMessages(prev => [...prev, userMsg]);
 
-    // 3. Handle Logic based on Channel Type
-    if (activeChannel.type === 'ai') {
-        // --- AI LOGIC (Client-side directly to Gemini) ---
+    if (activeChannel?.type === 'ai') {
         setIsAiProcessing(true);
         const aiMsgId = generateId();
-        
-        const aiMsg: Message = {
+        setMessages(prev => [...prev, {
             id: aiMsgId,
             channelId: activeChannelId,
             senderId: 'Gemini',
@@ -152,33 +139,26 @@ const App: React.FC = () => {
             timestamp: Date.now(),
             type: MessageType.TEXT,
             isStreaming: true
-        };
-        setMessages(prev => [...prev, aiMsg]);
+        }]);
 
         try {
             let prompt = text;
             if (file) prompt = `[File: ${file.name}]. ${text}`;
-
             const stream = sendMessageStream(prompt);
             let fullText = "";
-
             for await (const chunk of stream) {
                 fullText += chunk;
                 updateAiMessage(aiMsgId, fullText, true);
             }
             updateAiMessage(aiMsgId, fullText, false);
-
         } catch (error) {
-            console.error("AI Error:", error);
-            updateAiMessage(aiMsgId, "Lỗi kết nối tới AI.", false);
+            updateAiMessage(aiMsgId, "Lỗi kết nối AI.", false);
         } finally {
             setIsAiProcessing(false);
         }
-
     } else {
-        // --- NORMAL CHAT LOGIC (Send to Backend DB) ---
         try {
-            const response = await fetch(`${API_URL}/messages`, {
+            await fetch(`${API_URL}/messages`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -190,47 +170,88 @@ const App: React.FC = () => {
                     fileName: file ? file.name : null
                 })
             });
-            if (!response.ok) throw new Error('Failed to send to server');
         } catch (error) {
-            console.error("Failed to send message to backend (Offline mode active)", error);
+            console.error("Failed to send", error);
         }
     }
   };
 
-  // Render Auth Page if not logged in
-  if (!currentUser) {
-      return <AuthPage onLoginSuccess={setCurrentUser} />;
-  }
+  if (!currentUser) return <AuthPage onLoginSuccess={setCurrentUser} />;
 
-  // Render Main App
   return (
-    <div className="flex h-screen overflow-hidden bg-gray-100">
-      <Sidebar 
-        channels={channels} 
-        activeChannelId={activeChannelId} 
-        onSelectChannel={setActiveChannelId}
-        isOpen={isSidebarOpen}
-        onCloseMobile={() => setIsSidebarOpen(false)}
-        currentUser={currentUser}
-        onLogout={() => setCurrentUser(null)}
-      />
+    <div className="flex h-[100dvh] w-screen overflow-hidden bg-white">
       
-      <main className="flex-1 flex flex-col min-w-0 transition-all duration-300">
-        <ChatArea 
-            messages={messages} 
-            activeChannelName={activeChannel.name}
-            isAiChannel={activeChannel.type === 'ai'}
-            onOpenSidebar={() => setIsSidebarOpen(true)}
-            onStartCall={() => setIsInCall(true)}
-        />
-        <MessageInput 
-            onSendMessage={handleSendMessage} 
-            disabled={isAiProcessing && activeChannel.type === 'ai'}
-            placeholder={activeChannel.type === 'ai' ? "Hỏi gì đó với Gemini..." : `Gửi tin nhắn tới #${activeChannel.name}`}
-        />
-      </main>
+      {/* 
+        LAYOUT STRATEGY:
+        - Mobile: Sidebar is visible. If a channel is selected, ChatArea overlays everything (fixed).
+        - Desktop: Sidebar (w-80) | ChatArea (flex-1)
+      */}
 
-      {isInCall && (
+      {/* --- SIDEBAR AREA (Desktop: Always, Mobile: Only if no chat active or active but z-index lower) --- */}
+      <div className={`
+        flex-shrink-0 w-full md:w-80 h-full bg-white z-0
+        ${isMobile && activeChannelId ? 'hidden' : 'block'} 
+        md:block
+      `}>
+          <Sidebar 
+            channels={channels} 
+            activeChannelId={activeChannelId || ''} 
+            onSelectChannel={setActiveChannelId}
+            currentUser={currentUser}
+            onLogout={() => setCurrentUser(null)}
+            isMobileView={isMobile}
+          />
+          
+          {/* Mobile Bottom Nav */}
+          <div className="md:hidden h-14 bg-white border-t border-gray-200 flex justify-around items-center absolute bottom-0 w-full z-10 safe-bottom">
+             <button 
+                onClick={() => setMobileTab('chats')} 
+                className={`flex flex-col items-center p-1 ${mobileTab === 'chats' ? 'text-blue-600' : 'text-gray-400'}`}
+             >
+                <MessageCircle size={22} fill={mobileTab === 'chats' ? "currentColor" : "none"} />
+                <span className="text-[10px] font-medium mt-0.5">Tin nhắn</span>
+             </button>
+             <button 
+                onClick={() => setMobileTab('contacts')} 
+                className={`flex flex-col items-center p-1 ${mobileTab === 'contacts' ? 'text-blue-600' : 'text-gray-400'}`}
+             >
+                <Users size={22} />
+                <span className="text-[10px] font-medium mt-0.5">Danh bạ</span>
+             </button>
+             <button 
+                onClick={() => setMobileTab('me')} 
+                className={`flex flex-col items-center p-1 ${mobileTab === 'me' ? 'text-blue-600' : 'text-gray-400'}`}
+             >
+                <UserIcon size={22} />
+                <span className="text-[10px] font-medium mt-0.5">Cá nhân</span>
+             </button>
+          </div>
+      </div>
+      
+      {/* --- CHAT AREA (Desktop: Flex-1, Mobile: Overlay Full Screen) --- */}
+      {activeChannelId && (
+        <main className={`
+            flex flex-col bg-[#eef0f1]
+            ${isMobile 
+                ? 'fixed inset-0 z-50 w-full h-[100dvh]' // Mobile Overlay
+                : 'flex-1 min-w-0 h-full relative' // Desktop Flex
+            }
+        `}>
+            <ChatArea 
+                messages={messages} 
+                activeChannelName={activeChannel?.name || 'Loading...'}
+                isAiChannel={activeChannel?.type === 'ai'}
+                onBackToMenu={() => setActiveChannelId(null)}
+                onStartCall={() => setIsInCall(true)}
+            />
+            <MessageInput 
+                onSendMessage={handleSendMessage} 
+                disabled={isAiProcessing && activeChannel?.type === 'ai'}
+            />
+        </main>
+      )}
+
+      {isInCall && activeChannel && (
         <VideoCallModal 
             recipientName={activeChannel.name}
             isAiCall={activeChannel.type === 'ai'}

@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Paperclip, Mic, Image as ImageIcon, Smile } from 'lucide-react';
+import { Send, Paperclip, Image as ImageIcon, Smile, MoreHorizontal } from 'lucide-react';
 
 interface MessageInputProps {
   onSendMessage: (text: string, file?: File) => void;
@@ -9,14 +9,13 @@ interface MessageInputProps {
 
 const MessageInput: React.FC<MessageInputProps> = ({ onSendMessage, disabled, placeholder }) => {
   const [text, setText] = useState('');
-  const [isFocused, setIsFocused] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (textareaRef.current) {
-      textareaRef.current.style.height = 'auto';
-      textareaRef.current.style.height = Math.min(textareaRef.current.scrollHeight, 150) + 'px';
+      textareaRef.current.style.height = 'auto'; // Reset height
+      textareaRef.current.style.height = Math.min(textareaRef.current.scrollHeight, 120) + 'px';
     }
   }, [text]);
 
@@ -37,73 +36,68 @@ const MessageInput: React.FC<MessageInputProps> = ({ onSendMessage, disabled, pl
   };
 
   return (
-    <div className="p-4 bg-white border-t border-gray-200">
-      <div 
-        className={`
-            flex flex-col bg-gray-50 border rounded-2xl transition-all duration-200
-            ${isFocused ? 'border-indigo-500 ring-1 ring-indigo-500 shadow-sm bg-white' : 'border-gray-300'}
-        `}
-      >
-        <textarea
-          ref={textareaRef}
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-          onKeyDown={handleKeyDown}
-          onFocus={() => setIsFocused(true)}
-          onBlur={() => setIsFocused(false)}
-          placeholder={placeholder || "Nhập tin nhắn..."}
-          disabled={disabled}
-          className="w-full bg-transparent border-none focus:ring-0 resize-none px-4 py-3 max-h-40 text-sm text-gray-800 placeholder-gray-400"
-          rows={1}
-        />
-        
-        <div className="flex items-center justify-between px-2 pb-2">
-            <div className="flex items-center space-x-1">
-                 <input 
-                    type="file" 
-                    ref={fileInputRef} 
-                    className="hidden" 
-                    onChange={() => {
-                        // Visual feedback for file selection could go here
-                        if(fileInputRef.current?.files?.length) {
-                             setText(prev => prev + ` [Đính kèm: ${fileInputRef.current?.files?.[0].name}] `);
-                        }
-                    }}
-                 />
-                 <button 
-                    onClick={() => fileInputRef.current?.click()}
-                    className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-200/50 rounded-full transition-colors" 
-                    title="Đính kèm file"
-                 >
-                    <Paperclip size={18} />
-                 </button>
-                 <button className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-200/50 rounded-full transition-colors hidden sm:block">
-                    <ImageIcon size={18} />
-                 </button>
-                 <button className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-200/50 rounded-full transition-colors hidden sm:block">
-                    <Smile size={18} />
-                 </button>
-            </div>
-            
-            <button
+    <div className="bg-white border-t border-gray-200 px-3 py-2 safe-bottom">
+      <div className="flex items-end space-x-2">
+          {/* Tool buttons */}
+          <div className="flex items-center pb-2 space-x-1 sm:space-x-2 text-gray-500">
+             <button className="p-2 hover:bg-gray-100 rounded-full transition-colors hidden sm:block">
+                <Smile size={24} />
+             </button>
+             <button 
+                onClick={() => fileInputRef.current?.click()}
+                className="p-2 hover:bg-gray-100 rounded-full transition-colors"
+             >
+                <ImageIcon size={24} />
+             </button>
+             <button 
+                onClick={() => fileInputRef.current?.click()}
+                className="p-2 hover:bg-gray-100 rounded-full transition-colors"
+             >
+                <Paperclip size={22} />
+             </button>
+             <input 
+                type="file" 
+                ref={fileInputRef} 
+                className="hidden" 
+                onChange={() => {
+                    if(fileInputRef.current?.files?.length) {
+                         setText(prev => prev + ` [File: ${fileInputRef.current?.files?.[0].name}] `);
+                    }
+                }}
+             />
+          </div>
+
+          {/* Input Area */}
+          <div className="flex-1 bg-white">
+              <textarea
+                ref={textareaRef}
+                value={text}
+                onChange={(e) => setText(e.target.value)}
+                onKeyDown={handleKeyDown}
+                placeholder={placeholder || "Nhập tin nhắn @..."}
+                disabled={disabled}
+                rows={1}
+                className="w-full bg-gray-50 border border-transparent focus:border-blue-300 focus:bg-white focus:ring-2 focus:ring-blue-100 rounded-xl px-4 py-2.5 text-[15px] resize-none text-gray-800 placeholder-gray-400 transition-all"
+                style={{ maxHeight: '120px' }}
+              />
+          </div>
+
+          {/* Send Button */}
+          <div className="pb-1">
+             <button
                 onClick={handleSend}
-                disabled={!text.trim() || disabled}
+                disabled={!text.trim() && !fileInputRef.current?.files?.length || disabled}
                 className={`
-                    p-2 rounded-xl flex items-center justify-center transition-all duration-200
-                    ${text.trim() 
-                        ? 'bg-indigo-600 text-white shadow-md hover:bg-indigo-700 transform hover:scale-105 active:scale-95' 
-                        : 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                    p-2.5 rounded-xl flex items-center justify-center transition-all
+                    ${text.trim() || fileInputRef.current?.files?.length
+                        ? 'bg-[#0068ff] text-white shadow-md hover:bg-blue-600' 
+                        : 'text-[#0068ff] hover:bg-blue-50'
                     }
                 `}
             >
-                <Send size={18} />
+                <Send size={20} className={text.trim() ? "ml-0.5" : ""} />
             </button>
-        </div>
-      </div>
-      <div className="text-center mt-2">
-          <p className="text-[10px] text-gray-400">
-            <strong>Enter</strong> để gửi, <strong>Shift + Enter</strong> để xuống dòng.
-          </p>
+          </div>
       </div>
     </div>
   );

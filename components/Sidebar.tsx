@@ -1,156 +1,152 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Channel, User as UserType } from '../types';
-import { Hash, User, Bot, Plus, Settings, LogOut, Menu } from 'lucide-react';
+import { Search, Bot, Users, MessageCircle, Plus, LogOut, Video } from 'lucide-react';
 
 interface SidebarProps {
   channels: Channel[];
   activeChannelId: string;
   onSelectChannel: (channelId: string) => void;
-  isOpen: boolean;
-  onCloseMobile: () => void;
   currentUser: UserType | null;
   onLogout: () => void;
+  isMobileView?: boolean;
 }
 
-const Sidebar: React.FC<SidebarProps> = ({ channels, activeChannelId, onSelectChannel, isOpen, onCloseMobile, currentUser, onLogout }) => {
-  const groupChannels = channels.filter(c => c.type === 'channel');
-  const dms = channels.filter(c => c.type === 'dm');
-  const aiChannels = channels.filter(c => c.type === 'ai');
+const Sidebar: React.FC<SidebarProps> = ({ channels, activeChannelId, onSelectChannel, currentUser, onLogout, isMobileView }) => {
+  const [activeTab, setActiveTab] = useState<'messages' | 'contacts'>('messages');
+  const [searchTerm, setSearchTerm] = useState('');
 
-  const navClass = `
-    fixed inset-y-0 left-0 z-30 w-64 bg-slate-900 text-slate-300 transform transition-transform duration-300 ease-in-out flex flex-col
-    ${isOpen ? 'translate-x-0' : '-translate-x-full'}
-    md:relative md:translate-x-0
-  `;
+  // Lọc channels dựa trên tab và search
+  const filteredChannels = channels.filter(channel => {
+    const matchesSearch = channel.name.toLowerCase().includes(searchTerm.toLowerCase());
+    if (!matchesSearch) return false;
+
+    if (activeTab === 'messages') {
+        // Tab tin nhắn hiện tất cả các cuộc hội thoại gần đây
+        return true; 
+    } else {
+        // Tab danh bạ chỉ hiện người hoặc nhóm
+        return channel.type !== 'ai';
+    }
+  });
 
   return (
-    <>
-      {/* Mobile Overlay */}
-      {isOpen && (
-        <div 
-          className="fixed inset-0 bg-black bg-opacity-50 z-20 md:hidden"
-          onClick={onCloseMobile}
-        ></div>
-      )}
-
-      <aside className={navClass}>
-        {/* Header */}
-        <div className="h-16 flex items-center px-4 bg-slate-950 border-b border-slate-800 shadow-md">
-          <div className="w-8 h-8 bg-indigo-500 rounded-lg flex items-center justify-center mr-3">
-            <span className="text-white font-bold">N</span>
-          </div>
-          <h1 className="text-white font-bold text-lg tracking-tight">NexChat</h1>
+    <div className="flex flex-col h-full bg-white border-r border-gray-200 w-full md:w-80 shadow-sm">
+      
+      {/* Header & Search */}
+      <div className="px-4 py-3 bg-white z-10">
+        <div className="flex items-center justify-between mb-3">
+             <div className="flex items-center space-x-2">
+                 <img src={currentUser?.avatar} className="w-8 h-8 rounded-full border border-gray-200" alt="Avatar"/>
+                 <span className="font-bold text-gray-800 text-lg">Tin nhắn</span>
+             </div>
+             <button title="Tạo mới" className="p-1.5 text-gray-600 hover:bg-gray-100 rounded-md">
+                 <Plus size={20} />
+             </button>
         </div>
-
-        {/* Scrollable List */}
-        <div className="flex-1 overflow-y-auto py-4 px-3 space-y-6">
-          
-          {/* AI Section */}
-          <div>
-            <div className="flex items-center justify-between px-2 mb-2">
-              <h2 className="text-xs font-semibold uppercase tracking-wider text-slate-500">Trợ lý AI</h2>
-            </div>
-            <ul>
-              {aiChannels.map(channel => (
-                <li key={channel.id}>
-                  <button
-                    onClick={() => { onSelectChannel(channel.id); onCloseMobile(); }}
-                    className={`w-full flex items-center px-2 py-2 rounded-md transition-colors ${
-                      activeChannelId === channel.id ? 'bg-indigo-600 text-white shadow-sm' : 'hover:bg-slate-800'
-                    }`}
-                  >
-                    <Bot size={18} className={`mr-2 ${activeChannelId === channel.id ? 'text-indigo-200' : 'text-indigo-400'}`} />
-                    <span className="truncate text-sm font-medium">{channel.name}</span>
-                  </button>
-                </li>
-              ))}
-            </ul>
-          </div>
-
-          {/* Channels Section */}
-          <div>
-            <div className="flex items-center justify-between px-2 mb-2 group cursor-pointer">
-              <h2 className="text-xs font-semibold uppercase tracking-wider text-slate-500 group-hover:text-slate-400 transition-colors">Kênh chung</h2>
-              <Plus size={14} className="text-slate-500 group-hover:text-white transition-colors" />
-            </div>
-            <ul className="space-y-0.5">
-              {groupChannels.map(channel => (
-                <li key={channel.id}>
-                  <button
-                    onClick={() => { onSelectChannel(channel.id); onCloseMobile(); }}
-                    className={`w-full flex items-center px-2 py-2 rounded-md transition-colors ${
-                      activeChannelId === channel.id ? 'bg-slate-800 text-white' : 'hover:bg-slate-800'
-                    }`}
-                  >
-                    <Hash size={16} className="mr-2 text-slate-500" />
-                    <span className="truncate text-sm font-medium">{channel.name}</span>
-                    {channel.unreadCount ? (
-                       <span className="ml-auto bg-red-500 text-white text-[10px] px-1.5 py-0.5 rounded-full font-bold">{channel.unreadCount}</span>
-                    ) : null}
-                  </button>
-                </li>
-              ))}
-            </ul>
-          </div>
-
-          {/* DMs Section */}
-          <div>
-            <div className="flex items-center justify-between px-2 mb-2 group cursor-pointer">
-              <h2 className="text-xs font-semibold uppercase tracking-wider text-slate-500 group-hover:text-slate-400 transition-colors">Tin nhắn</h2>
-              <Plus size={14} className="text-slate-500 group-hover:text-white transition-colors" />
-            </div>
-            <ul className="space-y-0.5">
-              {dms.map(channel => (
-                <li key={channel.id}>
-                  <button
-                    onClick={() => { onSelectChannel(channel.id); onCloseMobile(); }}
-                    className={`w-full flex items-center px-2 py-2 rounded-md transition-colors ${
-                      activeChannelId === channel.id ? 'bg-slate-800 text-white' : 'hover:bg-slate-800'
-                    }`}
-                  >
-                    <div className="relative mr-2">
-                        {channel.avatar ? (
-                            <img src={channel.avatar} alt="" className="w-5 h-5 rounded-full" />
-                        ) : (
-                            <User size={16} className="text-slate-500" />
-                        )}
-                        <span className="absolute bottom-0 right-0 w-1.5 h-1.5 bg-green-500 border border-slate-900 rounded-full"></span>
-                    </div>
-                    <span className="truncate text-sm font-medium">{channel.name}</span>
-                  </button>
-                </li>
-              ))}
-            </ul>
-          </div>
+        
+        <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
+            <input 
+                type="text" 
+                placeholder="Tìm kiếm bạn bè, tin nhắn..." 
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full pl-9 pr-4 py-2 bg-gray-100 border-none rounded-lg text-sm focus:ring-1 focus:ring-blue-500 outline-none transition-all"
+            />
         </div>
+      </div>
 
-        {/* User Footer */}
-        {currentUser && (
-          <div className="p-4 bg-slate-950/50 border-t border-slate-800">
-            <div className="flex items-center">
-              <img 
-                src={currentUser.avatar} 
-                alt={currentUser.name} 
-                className="w-9 h-9 rounded-full border border-slate-600 bg-slate-700" 
-              />
-              <div className="ml-3 flex-1 min-w-0">
-                <p className="text-sm font-medium text-white truncate">{currentUser.name}</p>
-                <p className="text-xs text-slate-400 truncate capitalize">{currentUser.status}</p>
-              </div>
-              <div className="flex space-x-1">
-                  <button 
-                    onClick={onLogout}
-                    title="Đăng xuất"
-                    className="p-1.5 text-slate-400 hover:text-red-400 hover:bg-slate-800 rounded-md transition-colors"
-                  >
-                      <LogOut size={16} />
-                  </button>
-              </div>
-            </div>
-          </div>
+      {/* Tabs (Giống Zalo PC) */}
+      <div className="flex border-b border-gray-100 px-2">
+          <button 
+            onClick={() => setActiveTab('messages')}
+            className={`flex-1 pb-2 text-sm font-medium border-b-2 transition-colors ${activeTab === 'messages' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
+          >
+            Tất cả
+          </button>
+          <button 
+             onClick={() => setActiveTab('contacts')}
+             className={`flex-1 pb-2 text-sm font-medium border-b-2 transition-colors ${activeTab === 'contacts' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
+          >
+            Phân loại
+          </button>
+      </div>
+
+      {/* List */}
+      <div className="flex-1 overflow-y-auto custom-scrollbar">
+        {filteredChannels.length === 0 ? (
+             <div className="flex flex-col items-center justify-center h-40 text-gray-400">
+                 <p className="text-sm">Không tìm thấy kết quả</p>
+             </div>
+        ) : (
+            <ul className="divide-y divide-gray-50">
+            {filteredChannels.map(channel => {
+                const isActive = activeChannelId === channel.id && !isMobileView; // Trên mobile không highlight khi chưa vào
+                
+                return (
+                    <li key={channel.id}>
+                    <button
+                        onClick={() => onSelectChannel(channel.id)}
+                        className={`w-full flex items-center px-4 py-3 hover:bg-gray-50 transition-colors ${isActive ? 'bg-blue-50' : ''}`}
+                    >
+                        <div className="relative mr-3.5">
+                            {channel.type === 'ai' ? (
+                                <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center border border-blue-200">
+                                    <Bot size={24} className="text-blue-600" />
+                                </div>
+                            ) : channel.type === 'channel' ? (
+                                <div className="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center border border-gray-200">
+                                    <Users size={20} className="text-gray-500" />
+                                </div>
+                            ) : (
+                                <img src={channel.avatar || 'https://via.placeholder.com/48'} alt="" className="w-12 h-12 rounded-full object-cover border border-gray-200" />
+                            )}
+                            
+                            {/* Online status dot */}
+                            {channel.type === 'dm' && (
+                                <span className="absolute bottom-0.5 right-0.5 w-3 h-3 bg-green-500 border-2 border-white rounded-full"></span>
+                            )}
+                        </div>
+
+                        <div className="flex-1 min-w-0 text-left">
+                            <div className="flex justify-between items-baseline mb-0.5">
+                                <h3 className={`truncate text-[15px] ${isActive ? 'font-bold text-blue-900' : 'font-medium text-gray-900'}`}>
+                                    {channel.name}
+                                </h3>
+                                <span className="text-[11px] text-gray-400 font-medium">12:30</span>
+                            </div>
+                            <div className="flex justify-between items-center">
+                                <p className={`truncate text-[13px] pr-2 ${channel.unreadCount ? 'font-semibold text-gray-800' : 'text-gray-500'}`}>
+                                    {channel.type === 'ai' ? 'Tôi có thể giúp gì cho bạn?' : (channel.lastMessage || 'Bạn: Hình ảnh đính kèm')}
+                                </p>
+                                {channel.unreadCount && (
+                                    <span className="min-w-[18px] h-[18px] flex items-center justify-center bg-red-500 text-white text-[10px] font-bold rounded-full px-1">
+                                        {channel.unreadCount}
+                                    </span>
+                                )}
+                            </div>
+                        </div>
+                    </button>
+                    </li>
+                );
+            })}
+            </ul>
         )}
-      </aside>
-    </>
+      </div>
+
+      {/* Logout / User Footer */}
+      <div className="p-3 border-t border-gray-100 bg-gray-50 flex justify-between items-center">
+          <div className="text-xs text-gray-500">
+              {currentUser?.status === 'online' ? '● Đang hoạt động' : '○ Ngoại tuyến'}
+          </div>
+          <button 
+            onClick={onLogout}
+            className="flex items-center text-xs font-medium text-gray-500 hover:text-red-600 transition-colors"
+          >
+              <LogOut size={14} className="mr-1" /> Đăng xuất
+          </button>
+      </div>
+    </div>
   );
 };
 
